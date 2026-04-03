@@ -598,6 +598,80 @@ class Channel extends BaseClass {
     return false;
   }
 
+  // 通过弹幕元素宽度预估，判断元素是否能够上屏，能够上屏后再创建弹幕元素插入，减少碰撞计算和DOM操作
+  addBulletV2({ textWidth, duration, successCallback }) {
+    const fakeBullet = {}
+
+    const moveVV1 =  (this.containerWidth + textWidth) / duration;
+    let channelIndex = -1;
+    const currentTime = getTimeStamp();
+    if (!this.channels) {
+      return false;
+    }
+    
+    for (let i = 0; i < this.channels.length; i++) {
+      const channel = this.channels[i];
+      // 轨道被冻结，不能入轨
+      if (channel.freeze) {
+        continue;
+      }
+      const lastBullet = channel.queue.scroll[0];
+      // 当前轨道为空
+      if (!lastBullet || !lastBullet.el) {
+        channelIndex = channel.id;
+        break;
+      }
+  
+      // 元素暂停，或者重新设置字体大小后，或者缩放后，增加recalculate标记，在碰到冲突的时候，需要实时计算位置
+      if (lastBullet.recalculate) {
+        const lastBulletPos = lastBullet.updatePosition();
+        if (this.containerRight > lastBulletPos.right) {
+          // 元素已经完全进入屏幕
+          const diff = lastBullet.fullLeaveTime - currentTime - this.containerWidth / moveVV1;
+          fakeBullet.waitTimeStamp = diff >= 0 ? currentTime + diff : 0;
+          channelIndex = channel.id;
+          break;
+        }
+      } else if (lastBullet.waitTimeStamp || !lastBullet.startsTime || !lastBullet.fullEnterTime) {
+        //队列中还有元素在等待，队列繁忙
+        continue;
+      } else if (lastBullet.fullEnterTime < currentTime) {
+        // 元素已上屏
+        // 轨道前面元素的速度更大
+        if (lastBullet.moveVV1 > moveVV1) {
+          channelIndex = channel.id;
+          break;
+        }
+        const diff = lastBullet.fullLeaveTime - currentTime - this.containerWidth / moveVV1;
+        channelIndex = channel.id;
+        if (diff > 0) {
+          fakeBullet.waitTimeStamp = currentTime + diff;
+        }
+        break;
+      }
+    }
+    if (channelIndex > -1) {
+      const bullet = successCallback();
+      Object.assign(bullet, fakeBullet);
+      if (this.danmu && this.danmu.updateAttachTimes) {
+        this.danmu.updateAttachTimes();
+      }
+      const channel = this.channels[channelIndex];
+      channel.queue.scroll.unshift(bullet);
+      bullet.channelIndex = channelIndex;
+      bullet.top = channelIndex * this.channelHeight;
+      bullet.channelId = channelIndex;
+      bullet.startMoveV1();   
+      return {
+        success: true,
+        bullet
+      };
+    }
+    return {
+      success: false,
+    };
+  }
+
   removeBullet(bullet) {
     this.logger && this.logger.info(`removeBullet ${bullet.options.txt || '[DOM Element]'}`)
 

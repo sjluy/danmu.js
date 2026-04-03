@@ -481,6 +481,7 @@ class Main extends BaseClass {
   readDataV1() {
     const { danmu, interval, channel, data, forceDuration } = this;
     const player = danmu.player;
+    const { globalHooks } = danmu;
     
     // 如果弹幕初始化未完成，或轨道已满，不进行弹幕数据处理
     if (!danmu.isReady || !danmu.main) {
@@ -547,6 +548,32 @@ class Main extends BaseClass {
       // 检查弹幕是否已存在于队列中
       if (!channel.checkAvailableTrackV1() || this._status !== 'playing' || (this.queue && this.queue.find(j => j.id === item.id))) {
         continue;
+      }
+      
+      if (danmu.config && danmu.config.textWidthPrediction && item && item.style && item.style.fontSize) {
+        // 预判断弹幕文本的宽度，看是否能够上屏，能够上屏后再创建弹幕元素插入
+        const bulletEstimaWidth = item.estimaWidth || globalHooks.bulletEstimaWidth(item.text, item.style.fontSize);
+        if (bulletEstimaWidth > 0) {
+          item.attached_ = true;
+          const { success, bullet } = channel.addBulletV2({
+            textWidth: bulletEstimaWidth,
+            duration: item.duration,
+            successCallback: () => {
+              const bull = new Bullet(danmu, item);
+              item.estimaWidth = bulletEstimaWidth;
+              bull.attachV1();
+              bull.width = bulletEstimaWidth;
+              return bull;
+            }
+          });
+          if (success) {
+            this.queue.push(bullet);
+            bullet.topInit();
+          } else {
+            item.attached_ = false;
+          }
+          continue;
+        }
       }
 
       const bullet = new Bullet(danmu, item);
