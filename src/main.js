@@ -552,7 +552,7 @@ class Main extends BaseClass {
       
       if (danmu.config && danmu.config.textWidthPrediction && item && item.style && item.style.fontSize) {
         // 预判断弹幕文本的宽度，看是否能够上屏，能够上屏后再创建弹幕元素插入
-        const bulletEstimaWidth = item.estimaWidth || globalHooks.bulletEstimaWidth(item.text, item.style.fontSize);
+        const bulletEstimaWidth = item.estimaWidth || globalHooks.bulletEstimaWidth(item.text, item.style.fontSize, item._);
         if (bulletEstimaWidth > 0) {
           item.attached_ = true;
           const { success, bullet } = channel.addBulletV2({
